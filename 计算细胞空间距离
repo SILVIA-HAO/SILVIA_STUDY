@@ -1,0 +1,111 @@
+import numpy as np
+import pandas as pd
+from pandas import DataFrame
+import os
+
+########导入数据############
+data = pd.read_csv('C:/Users/dell/Desktop/test2/cell_seg_data.csv', sep=',')    ####读取文件目录
+print(data.columns)          ####3检查列名是否正确
+#####筛选需要的列，定义表型#######
+dis = data.loc[:, ['Cell ID', 'Cell X Position', 'Cell Y Position', 'Nucleus PD1 (PPD520) Mean (Normalized Counts, Total Weighting)', 'Nucleus CD8A (PPD650) Mean (Normalized Counts, Total Weighting)']]      ####定位位置坐标数据
+columnsname = list(['Cell ID', 'Cell X Position', 'Cell Y Position', 'Nucleus PD1 (PPD520) Mean (Normalized Counts, Total Weighting)', 'Nucleus CD8A (PPD650) Mean (Normalized Counts, Total Weighting)'])         #####将列名存入列表
+dis_frame = DataFrame(dis, columns=columnsname)     ######将坐标数据存为DataFrame
+dis_frame = dis_frame.rename(columns={'Nucleus PD1 (PPD520) Mean (Normalized Counts, Total Weighting)': 'vec1',
+                                      'Nucleus CD8A (PPD650) Mean (Normalized Counts, Total Weighting)': 'vec2'})
+dis_frame['phenotype1'] = (dis_frame['vec1'] > 0.02)
+dis_frame['phenotype2'] = (dis_frame['vec1'] < 0.02)&(dis_frame['vec2'] > 0.01)
+print(dis_frame)
+#####统计A类细胞和B类细胞的数目######3
+from_count = dis_frame.groupby(by=['phenotype1']).size()
+to_count = dis_frame.groupby(by=['phenotype2']).size()
+from_count.reset_index(name='from_count')
+to_count.reset_index(name='to_count')
+
+###########计算各个点之间的欧式距离###########
+
+#####计算X坐标的差平方######
+#######生成空列表######
+dis_x_sum = []
+sample_id_key = []
+sample_id_attach = []
+
+for i in range(0, len(dis_frame)):
+    for j in range(0, len(dis_frame)):
+        distance_x = (dis_frame.iloc[i, 1]-dis_frame.iloc[j, 1])**2
+        dis_x_sum.append(distance_x)
+        sample_id_key.append(i+1)
+        sample_id_attach.append(j+1)
+dis_x = {"sample_id_key": sample_id_key,
+         "sample_id_attach": sample_id_attach,
+         "dis_x_sum": dis_x_sum}
+dis_x = DataFrame(dis_x)
+
+
+#####计算Y坐标的差平方######
+dis_y_sum = []
+sample_id_key = []
+sample_id_attach = []
+for i in range(0, len(dis_frame)):
+    for j in range(0, len(dis_frame)):
+        distance_y = (dis_frame.iloc[i, 2]-dis_frame.iloc[j, 2])**2
+        dis_y_sum.append(distance_y)
+        sample_id_key.append(i+1)
+        sample_id_attach.append(j+1)
+dis_y = {"sample_id_key": sample_id_key,
+         "sample_id_attach": sample_id_attach,
+         "dis_y_sum": dis_y_sum}
+dis_y = DataFrame(dis_y)
+
+#######合并数据集#######
+distance = pd.merge(dis_x, dis_y)
+
+######计算欧式距离#####
+distance['Euclidean'] = np.sqrt(distance['dis_y_sum']+distance['dis_y_sum'])    ####计算欧式距离，并将结果存入DataFrame
+print(distance)
+
+######匹配phenotype######
+
+#####以A为key######
+distance_A = distance.rename(columns={'sample_id_key': 'Cell ID'})
+distance_A_type = pd.merge(distance_A, dis_frame)
+distance_AA = distance_A_type.rename(columns={'Cell ID': 'sample_id_key'})
+distance_del_A = distance_AA.loc[:, ['sample_id_key', 'sample_id_attach', 'Euclidean', 'phenotype1', 'phenotype2']]
+distance_del_AA = distance_A[(distance_del_A["phenotype1"] == True) | (distance_del_A["phenotype2"] == True)]
+final_A = distance_del_AA[distance_del_AA.Euclidean < 25]
+group = final_A.groupby(by=['Cell ID']).size()######按cell分组
+group = group.reset_index(name='with')
+from_with = len(group)
+within = group['with'].sum()
+with_mean = within/from_count
+#####生成最终数据表######
+final_data = {'from_count': from_count,
+              'to_count': to_count,
+              'from_with': from_with,
+              'with_mean': with_mean,
+              'within': within}
+print(final_data)      ###输出结果
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
