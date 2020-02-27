@@ -1,0 +1,27 @@
+####导入需要的库
+import os
+import sys
+import json
+import fnmatch
+import pandas as pd
+
+path = "C:/Users/dell/Desktop/test/200239"   ####设置路径
+dirs = os.listdir(path)    ####列出该目录下所有文件
+print(dirs)
+
+######正则匹配所有需要合并的特定格式的文件
+datalist = []
+for files in dirs:
+    #if os.path.splitext(files)[1] == ".txt":     #####进行后缀名搜索
+    if fnmatch.fnmatch(files, '*cell_seg_data.txt'):     #####正则表达式匹配， *代表该位置可以任意字符
+        datalist.append(files)
+print(datalist)
+
+
+os.mkdir('C:/Users/dell/Desktop/test/200239/filter')   #####新建存储文件夹
+path_new = 'C:/Users/dell/Desktop/test/200239/filter'  #####确定新的存储路径
+for file in datalist:
+    data_path = path + '/' + file   ###设定具体txt文件的路径
+    data = pd.read_table(data_path, sep="\t")    ###读取文件
+    data = data[data['Entire Cell Autofluorescence Mean (Normalized Counts, Total Weighting)'] > 1]    ####根据条件进行筛选
+    data.to_csv(path_new + '/' + file, sep='\t', index=False)     ####将筛选结果保存
