@@ -1,0 +1,10 @@
+import matplotlib.pyplot as plt
+import matplotlib.cbook as cbook
+from matplotlib_scalebar.scalebar import ScaleBar
+
+plt.figure()
+image = plt.imread(cbook.get_sample_data('C:/Users/dell/Desktop/111/demo3_1.jpg'))     ###输入图片路径
+plt.imshow(image)
+scalebar = ScaleBar(0.496, 'um')     ####第一个参数是像素转换关系， 第二个参数是单位
+plt.gca().add_artist(scalebar)
+plt.show()
