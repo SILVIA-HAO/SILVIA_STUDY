@@ -1,0 +1,27 @@
+import os
+
+
+def listFiles(dirPath):
+    fileList=[]
+    for root, dirs, files in os.walk(dirPath):
+        for fileObj in files:
+            fileList.append(os.path.join(root, fileObj))
+    return fileList
+
+def main():
+    fileDir = "C:/Users/dell/Desktop/test"     ####替换为自己的路径
+    fileList = listFiles(fileDir)
+
+    for fileObj in fileList:
+        f = open(fileObj, 'r+', encoding='gb18030', errors='ignore')
+        all_the_lines = f.readlines()
+        f.seek(0)
+        f.truncate()
+        for line in all_the_lines:
+            str1 = 'PANCK'        ######需要替换的旧字符
+            str2 = 'PAN'          ######替换后的新字符
+            f.write(line.replace(str1, str2))
+        f.close()
+
+if __name__=='__main__':
+    main()
