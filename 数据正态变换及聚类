@@ -1,0 +1,365 @@
+#####替换字符串快捷键“Ctrl+R”
+
+#####导入需要的程序包
+import os
+import fnmatch
+import pandas as pd
+import numpy as np
+import scipy.cluster.hierarchy as hc
+from scipy.cluster.vq import kmeans2
+import matplotlib.pyplot as plt
+import statsmodels.api as sm
+import scipy
+import xlwt
+import math
+
+####数据清洗#######
+
+path = "C:/Users/dell/Desktop/test/1900225"
+dirs = os.listdir(path)    ####列出该目录下所有文件
+print(dirs)
+
+######正则匹配所有需要合并的特定格式的文件
+datalist = []
+for files in dirs:
+    #if os.path.splitext(files)[1] == ".txt":     #####进行后缀名搜索
+    if fnmatch.fnmatch(files, '*cell_seg_data.txt'):     #####正则表达式匹配， *代表该位置可以任意字符
+        datalist.append(files)
+print(datalist)
+
+######将提取出的文件名字扩展为可定位的路径
+path_list = []
+for file_path in datalist:
+    pathlist = path + '/' + file_path
+    path_list.append(pathlist)
+print(path_list)
+
+
+file = open('C:/Users/dell/Desktop/test/1900225/merge.txt','w')
+data_merge = []
+for file_path in path_list:
+    for i in open(file_path, 'r'):
+        line = str(i).strip()
+        print(str(line))
+        if line in data_merge:
+            continue
+        else:
+            data_merge.append(line)
+            file.write(line+ '\n')
+file.close()
+
+
+
+'''
+#####直接merge多个文件，不导出到本地
+data_merge = []
+for file_path in path_list:
+    for i in open(file_path, 'r'):
+        if i in data_merge:
+            continue
+        else:
+            data_merge.append(i)
+'''
+
+data = pd.read_table('C:/Users/dell/Desktop/test/200239/merge.txt', sep= "\t")
+data = pd.DataFrame(data)
+data.to_csv('C:/Users/dell/Desktop/test/200239/merge.csv', sep=',',index=False,header=True,na_rep="#N/A")
+
+
+
+#####导入数据
+data = pd.read_csv('C:/Users/dell/Desktop/test/1900225/merge.csv')
+data.head()
+data = data.iloc[:, [1,2,40,66,71,76]]
+data = data.dropna(axis=0)
+data.columns = list(['Sample Name','Tissue Category','CD8','CD68','HLADR','CD56'])
+data = pd.DataFrame(data)
+######数据正态化
+data['norm_CD8'] = scipy.stats.boxcox(data['CD8']+1, alpha=None)[0]       ####数据进行boxcox变换
+#sm.ProbPlot(data['norm_CD8'], fit=True).qqplot()         ####正态检验QQ图
+scipy.stats.shapiro(data['norm_CD8'])                    ####正态性Shapiro-Wilk test检验
+
+data['norm_CD68'] = scipy.stats.boxcox(data['CD68']+1, alpha=None)[0]
+#sm.qqplot(data['norm_CD68'], fit=True)
+scipy.stats.shapiro(data['norm_CD68'])
+
+data['norm_HLADR'] = scipy.stats.boxcox(data['HLADR']+1, alpha=None)[0]
+#sm.ProbPlot(data['norm_HLADR'], fit=True).qqplot()
+scipy.stats.shapiro(data['norm_HLADR'])
+
+data['norm_CD56'] = scipy.stats.boxcox(data['CD56']+1, alpha=None)[0]
+#sm.ProbPlot(data['norm_CD56'], fit=True).qqplot()
+scipy.stats.shapiro(data['norm_CD56'])
+
+
+
+#####将数据按照组织类型拆分成两个数据表
+data_tumor = data[data['Tissue Category']== 'TUMOR']
+data_tumor = pd.DataFrame(data_tumor)
+data_stroma = data[data['Tissue Category']== 'STROMA']
+data_stroma = pd.DataFrame(data_stroma)
+
+#####系统聚类#######
+
+#hc.fclusterdata(data.iloc[:, 6:7], 2.6, criterion='distance', metric='euclidean', method='average')
+
+
+#################################################################K-MEAN聚类#########################################################
+
+#######TUMOR数据表聚类
+data_tumor['group_CD8'] = kmeans2(data_tumor.iloc[:, 6], 2)[1]
+data_tumor['group_CD68'] = kmeans2(data_tumor.iloc[:, 7], 2)[1]
+data_tumor['group_HLADR'] = kmeans2(data_tumor.iloc[:, 8], 2)[1]
+data_tumor['group_CD56'] = kmeans2(data_tumor.iloc[:, 9], 2)[1]
+
+#######STROMA数据表聚类
+data_stroma['group_CD8'] = kmeans2(data_stroma.iloc[:, 6], 2)[1]
+data_stroma['group_CD68'] = kmeans2(data_stroma.iloc[:, 7], 2)[1]
+data_stroma['group_HLADR'] = kmeans2(data_stroma.iloc[:, 8], 2)[1]
+data_stroma['group_CD56'] = kmeans2(data_stroma.iloc[:, 9], 2)[1]
+
+#######汇总数据表聚类
+data['group_CD8'] = kmeans2(data.iloc[:, 6], 2)[1]
+data['group_CD68'] = kmeans2(data.iloc[:, 7], 2)[1]
+data['group_HLADR'] = kmeans2(data.iloc[:, 8], 2)[1]
+data['group_CD56'] = kmeans2(data.iloc[:, 9], 2)[1]
+
+#####导出分析结果数据
+data_tumor.to_csv('C:/Users/dell/Desktop/test/data_tumor.csv')
+data_stroma.to_csv('C:/Users/dell/Desktop/test/data_stroma.csv')
+data.to_csv('C:/Users/dell/Desktop/test/data.csv')
+
+##################################################################画频率直方图观察波形状态#################################################
+
+#####TUMOR的频率直方图
+#fig1 = plt.gcf()
+#fig1.set_size_inches(18.5,30)
+plot_CD8 = plt.hist(data_tumor['norm_CD8'], 500); plt.title("CD8")
+plt.savefig('C:/Users/dell/Desktop/test/HIST_PLOT/TUMOR_CD8')
+plt.clf()
+plot_CD68 = plt.hist(data_tumor['norm_CD68'], 500); plt.title("CD68")
+plt.savefig('C:/Users/dell/Desktop/test/HIST_PLOT/TUMOR_CD68')
+plt.clf()
+plot_HLADR = plt.hist(data_tumor['norm_HLADR'], 500); plt.title("HLADR")
+plt.savefig('C:/Users/dell/Desktop/test/HIST_PLOT/TUMOR_HLADR')
+plt.clf()
+plot_CD56 = plt.hist(data_tumor['norm_CD56'], 500); plt.title("CD56")
+plt.savefig('C:/Users/dell/Desktop/test/HIST_PLOT/TUMOR_CD56')
+plt.clf()
+
+#####STROMA的频率直方图
+#fig1 = plt.gcf()
+#fig1.set_size_inches(18.5,30)
+plot_CD8 = plt.hist(data_stroma['norm_CD8'], 500); plt.title("CD8")
+plt.savefig('C:/Users/dell/Desktop/test/HIST_PLOT/STROMA_CD8')
+plt.clf()
+plot_CD68 = plt.hist(data_stroma['norm_CD68'], 500); plt.title("CD68")
+plt.savefig('C:/Users/dell/Desktop/test/HIST_PLOT/STROMA_CD68')
+plt.clf()
+plot_HLADR = plt.hist(data_stroma['norm_HLADR'], 500); plt.title("HLADR")
+plt.savefig('C:/Users/dell/Desktop/test/HIST_PLOT/STROMA_HLADR')
+plt.clf()
+plot_CD56 = plt.hist(data_stroma['norm_CD56'], 500); plt.title("CD56")
+plt.savefig('C:/Users/dell/Desktop/test/HIST_PLOT/STROMA_CD56')
+plt.clf()
+
+#####汇总数据的频率直方图
+#fig1 = plt.gcf()
+#fig1.set_size_inches(18.5,30)
+plot_CD8 = plt.hist(data['norm_CD8'], 500); plt.title("CD8")
+plt.savefig('C:/Users/dell/Desktop/test/HIST_PLOT/CD8')
+plt.clf()
+plot_CD68 = plt.hist(data['norm_CD68'], 500); plt.title("CD68")
+plt.savefig('C:/Users/dell/Desktop/test/HIST_PLOT/CD68')
+plt.clf()
+plot_HLADR = plt.hist(data['norm_HLADR'], 500); plt.title("HLADR")
+plt.savefig('C:/Users/dell/Desktop/test/HIST_PLOT/HLADR')
+plt.clf()
+plot_CD56 = plt.hist(data['norm_CD56'], 500); plt.title("CD56")
+plt.savefig('C:/Users/dell/Desktop/test/HIST_PLOT/CD56')
+plt.clf()
+
+
+########################################计算各变量的不同聚类下的均值及标准差#############################################
+
+
+
+###########TUMOR的均值及标准差计算
+TUMOR_CD8_MEAN = data_tumor["norm_CD8"].groupby(data_tumor['group_CD8']).mean()
+TUMOR_CD68_MEAN = data_tumor["norm_CD68"].groupby(data_tumor['group_CD68']).mean()
+TUMOR_HLADR_MEAN = data_tumor["norm_HLADR"].groupby(data_tumor['group_HLADR']).mean()
+TUMOR_CD56_MEAN = data_tumor["norm_CD56"].groupby(data_tumor['group_CD56']).mean()
+TUMOR_CD8_SE = data_tumor["norm_CD8"].groupby(data_tumor['group_CD8']).std()/math.sqrt(len(data_tumor))
+TUMOR_CD68_SE = data_tumor["norm_CD68"].groupby(data_tumor['group_CD68']).std()/math.sqrt(len(data_tumor))
+TUMOR_HLADR_SE = data_tumor["norm_HLADR"].groupby(data_tumor['group_HLADR']).std()/math.sqrt(len(data_tumor))
+TUMOR_CD56_SE = data_tumor["norm_CD56"].groupby(data_tumor['group_CD56']).std()/math.sqrt(len(data_tumor))
+
+TUMOR_STAT_RESULT = {'TUMOR_CD8_MEAN': TUMOR_CD8_MEAN,
+               'TUMOR_CD68_MEAN':TUMOR_CD68_MEAN,
+               'TUMOR_HLADR_MEAN': TUMOR_HLADR_MEAN,
+               'TUMOR_CD56_MEAN': TUMOR_CD56_MEAN,
+               'TUMOR_CD8_SE': TUMOR_CD8_SE,
+               'TUMOR_CD68_SE': TUMOR_CD68_SE,
+               'TUMOR_HLADR_SE': TUMOR_HLADR_SE,
+               'TUMOR_CD56_SE': TUMOR_CD56_SE
+               }
+TUMOR_STAT_RESULT = pd.DataFrame(TUMOR_STAT_RESULT)
+
+
+###########STROMA的均值及标准差计算
+STROMA_CD8_MEAN = data_stroma["norm_CD8"].groupby(data_stroma['group_CD8']).mean()
+STROMA_CD68_MEAN = data_stroma["norm_CD68"].groupby(data_stroma['group_CD68']).mean()
+STROMA_HLADR_MEAN = data_stroma["norm_HLADR"].groupby(data_stroma['group_HLADR']).mean()
+STROMA_CD56_MEAN = data_stroma["norm_CD56"].groupby(data_stroma['group_CD56']).mean()
+STROMA_CD8_SE = data_stroma["norm_CD8"].groupby(data_stroma['group_CD8']).std()/math.sqrt(len(data_stroma))
+STROMA_CD68_SE = data_stroma["norm_CD68"].groupby(data_stroma['group_CD68']).std()/math.sqrt(len(data_stroma))
+STROMA_HLADR_SE = data_stroma["norm_HLADR"].groupby(data_stroma['group_HLADR']).std()/math.sqrt(len(data_stroma))
+STROMA_CD56_SE = data_stroma["norm_CD56"].groupby(data_stroma['group_CD56']).std()/math.sqrt(len(data_stroma))
+
+STROMA_STAT_RESULT = {'STROMA_CD8_MEAN': STROMA_CD8_MEAN,
+               'STROMA_CD68_MEAN':STROMA_CD68_MEAN,
+               'STROMA_HLADR_MEAN': STROMA_HLADR_MEAN,
+               'STROMA_CD56_MEAN': STROMA_CD56_MEAN,
+               'STROMA_CD8_SE': STROMA_CD8_SE,
+               'STROMA_CD68_SE': STROMA_CD68_SE,
+               'STROMA_HLADR_SE': STROMA_HLADR_SE,
+               'STROMA_CD56_SE': STROMA_CD56_SE
+               }
+STROMA_STAT_RESULT = pd.DataFrame(STROMA_STAT_RESULT)
+
+###########汇总数据的均值及标准差计算
+TOTAL_CD8_MEAN = data["norm_CD8"].groupby(data['group_CD8']).mean()
+TOTAL_CD68_MEAN = data["norm_CD68"].groupby(data['group_CD68']).mean()
+TOTAL_HLADR_MEAN = data["norm_HLADR"].groupby(data['group_HLADR']).mean()
+TOTAL_CD56_MEAN = data["norm_CD56"].groupby(data['group_CD56']).mean()
+TOTAL_CD8_SE = data["norm_CD8"].groupby(data['group_CD8']).std()/math.sqrt(len(data))
+TOTAL_CD68_SE = data["norm_CD68"].groupby(data['group_CD68']).std()/math.sqrt(len(data))
+TOTAL_HLADR_SE = data["norm_HLADR"].groupby(data['group_HLADR']).std()/math.sqrt(len(data))
+TOTAL_CD56_SE = data["norm_CD56"].groupby(data['group_CD56']).std()/math.sqrt(len(data))
+
+TOTAL_STAT_RESULT = {'TOTAL_CD8_MEAN': TOTAL_CD8_MEAN,
+               'TOTAL_CD68_MEAN':TOTAL_CD68_MEAN,
+               'TOTAL_HLADR_MEAN': TOTAL_HLADR_MEAN,
+               'TOTAL_CD56_MEAN': TOTAL_CD56_MEAN,
+               'TOTAL_CD8_SE': TOTAL_CD8_SE,
+               'TOTAL_CD68_SE': TOTAL_CD68_SE,
+               'TOTAL_HLADR_SE': TOTAL_HLADR_SE,
+               'TOTAL_CD56_SE': TOTAL_CD56_SE
+               }
+TOTAL_STAT_RESULT = pd.DataFrame(TOTAL_STAT_RESULT)
+
+writer = pd.ExcelWriter(r'C:/Users/dell/Desktop/test/1900225/RESULT_CHANGE.xls')
+TUMOR_STAT_RESULT.to_excel(writer, sheet_name='TUMOR_STAT_RESULT')
+STROMA_STAT_RESULT.to_excel(writer, sheet_name='STROMA_STAT_RESULT')
+TOTAL_STAT_RESULT.to_excel(writer, sheet_name='TOTAL_STAT_RESULT')
+writer.save()
+writer.close()
+
+###############################COXBOX逆转换###############
+#########定义反boxcox函数
+def invboxcox(y, ld):
+    if ld == 0:
+        return np.exp(y)
+    else:
+        return np.exp(np.log(ld*y+1))
+
+#print(invboxcox(y, ld))
+##########确定lambda的值
+fig = plt.figure(figsize=(10,10))
+ax1 = fig.add_subplot(221)
+prob = scipy.stats.boxcox_normplot(data['CD8']+1, -1, 20, plot=ax1)
+_, maxlog = scipy.stats.boxcox(data['CD8']+1)
+ax1.axvline(maxlog, color='r')
+
+ax2 = fig.add_subplot(222)
+prob = scipy.stats.boxcox_normplot(data['CD68']+1, -1, 20, plot=ax2)
+_, maxlog = scipy.stats.boxcox(data['CD68']+1)
+ax2.axvline(maxlog, color='r')
+
+ax3 = fig.add_subplot(223)
+prob = scipy.stats.boxcox_normplot(data['HLADR']+1, -1, 20, plot=ax3)
+_, maxlog = scipy.stats.boxcox(data['HLADR']+1)
+ax3.axvline(maxlog, color='r')
+
+ax4 = fig.add_subplot(224)
+prob = scipy.stats.boxcox_normplot(data['CD56']+1, -1, 20, plot=ax4)
+_, maxlog = scipy.stats.boxcox(data['CD56']+1)
+ax4.axvline(maxlog, color='r')
+
+plt.savefig('C:/Users/dell/Desktop/test/1900225/HIST_PLOT/lambda')
+
+####观察lambda的值
+lambda_CD8 = -9
+lambda_CD68 = -0.1
+lambda_HLADR = 1
+lambda_CD56 = 0.1
+
+########TUMOR  BOXCOX逆运算
+TUMOR_CD8_RE_MEAN = invboxcox(TUMOR_STAT_RESULT['TUMOR_CD8_MEAN'], lambda_CD8)
+TUMOR_CD68_RE_MEAN = invboxcox(TUMOR_STAT_RESULT['TUMOR_CD68_MEAN'], lambda_CD68)
+TUMOR_HLADR_RE_MEAN = invboxcox(TUMOR_STAT_RESULT['TUMOR_HLADR_MEAN'], lambda_HLADR)
+TUMOR_CD56_RE_MEAN = invboxcox(TUMOR_STAT_RESULT['TUMOR_CD56_MEAN'], lambda_CD56)
+TUMOR_CD8_RE_SE = invboxcox(TUMOR_STAT_RESULT['TUMOR_CD8_SE'], lambda_CD8)
+TUMOR_CD68_RE_SE = invboxcox(TUMOR_STAT_RESULT['TUMOR_CD68_SE'], lambda_CD68)
+TUMOR_HLADR_RE_SE = invboxcox(TUMOR_STAT_RESULT['TUMOR_HLADR_SE'], lambda_HLADR)
+TUMOR_CD56_RE_SE = invboxcox(TUMOR_STAT_RESULT['TUMOR_CD56_SE'], lambda_CD56)
+
+TUMOR_RE_RESULT = {'TUMOR_CD8_RE_MEAN':TUMOR_CD8_RE_MEAN,
+                   'TUMOR_CD68_RE_MEAN':TUMOR_CD68_RE_MEAN,
+                   'TUMOR_HLADR_RE_MEAN':TUMOR_HLADR_RE_MEAN,
+                   'TUMOR_CD56_RE_MEAN':TUMOR_CD56_RE_MEAN,
+                   'TUMOR_CD8_RE_SE':TUMOR_CD8_RE_SE,
+                   'TUMOR_CD68_RE_SE':TUMOR_CD68_RE_SE,
+                   'TUMOR_HLADR_RE_SE':TUMOR_HLADR_RE_SE,
+                   'TUMOR_CD56_RE_SE':TUMOR_CD56_RE_SE,
+                   }
+TUMOR_RE_RESULT = pd.DataFrame(TUMOR_RE_RESULT)
+
+########STROMA  BOXCOX逆运算
+STROMA_CD8_RE_MEAN = invboxcox(STROMA_STAT_RESULT['STROMA_CD8_MEAN'], lambda_CD8)
+STROMA_CD68_RE_MEAN = invboxcox(STROMA_STAT_RESULT['STROMA_CD68_MEAN'], lambda_CD68)
+STROMA_HLADR_RE_MEAN = invboxcox(STROMA_STAT_RESULT['STROMA_HLADR_MEAN'], lambda_HLADR)
+STROMA_CD56_RE_MEAN = invboxcox(STROMA_STAT_RESULT['STROMA_CD56_MEAN'], lambda_CD56)
+STROMA_CD8_RE_SE = invboxcox(STROMA_STAT_RESULT['STROMA_CD8_SE'], lambda_CD8)
+STROMA_CD68_RE_SE = invboxcox(STROMA_STAT_RESULT['STROMA_CD68_SE'], lambda_CD68)
+STROMA_HLADR_RE_SE = invboxcox(STROMA_STAT_RESULT['STROMA_HLADR_SE'], lambda_HLADR)
+STROMA_CD56_RE_SE = invboxcox(STROMA_STAT_RESULT['STROMA_CD56_SE'], lambda_CD56)
+
+STROMA_RE_RESULT = {'STROMA_CD8_RE_MEAN':STROMA_CD8_RE_MEAN,
+                   'STROMA_CD68_RE_MEAN':STROMA_CD68_RE_MEAN,
+                   'STROMA_HLADR_RE_MEAN':STROMA_HLADR_RE_MEAN,
+                   'STROMA_CD56_RE_MEAN':STROMA_CD56_RE_MEAN,
+                   'STROMA_CD8_RE_SE':STROMA_CD8_RE_SE,
+                   'STROMA_CD68_RE_SE':STROMA_CD68_RE_SE,
+                   'STROMA_HLADR_RE_SE':STROMA_HLADR_RE_SE,
+                   'STROMA_CD56_RE_SE':STROMA_CD56_RE_SE,
+                   }
+STROMA_RE_RESULT = pd.DataFrame(STROMA_RE_RESULT)
+
+########TOTAL  BOXCOX逆运算
+TOTAL_CD8_RE_MEAN = invboxcox(TOTAL_STAT_RESULT['TOTAL_CD8_MEAN'], lambda_CD8)
+TOTAL_CD68_RE_MEAN = invboxcox(TOTAL_STAT_RESULT['TOTAL_CD68_MEAN'], lambda_CD68)
+TOTAL_HLADR_RE_MEAN = invboxcox(TOTAL_STAT_RESULT['TOTAL_HLADR_MEAN'], lambda_HLADR)
+TOTAL_CD56_RE_MEAN = invboxcox(TOTAL_STAT_RESULT['TOTAL_CD56_MEAN'], lambda_CD56)
+TOTAL_CD8_RE_SE = invboxcox(TOTAL_STAT_RESULT['TOTAL_CD8_SE'], lambda_CD8)
+TOTAL_CD68_RE_SE = invboxcox(TOTAL_STAT_RESULT['TOTAL_CD68_SE'], lambda_CD68)
+TOTAL_HLADR_RE_SE = invboxcox(TOTAL_STAT_RESULT['TOTAL_HLADR_SE'], lambda_HLADR)
+TOTAL_CD56_RE_SE = invboxcox(TOTAL_STAT_RESULT['TOTAL_CD56_SE'], lambda_CD56)
+
+TOTAL_RE_RESULT = {'TOTAL_CD8_RE_MEAN':TOTAL_CD8_RE_MEAN,
+                   'TOTAL_CD68_RE_MEAN':TOTAL_CD68_RE_MEAN,
+                   'TOTAL_HLADR_RE_MEAN':TOTAL_HLADR_RE_MEAN,
+                   'TOTAL_CD56_RE_MEAN':TOTAL_CD56_RE_MEAN,
+                   'TOTAL_CD8_RE_SE':TOTAL_CD8_RE_SE,
+                   'TOTAL_CD68_RE_SE':TOTAL_CD68_RE_SE,
+                   'TOTAL_HLADR_RE_SE':TOTAL_HLADR_RE_SE,
+                   'TOTAL_CD56_RE_SE':TOTAL_CD56_RE_SE,
+                   }
+TOTAL_RE_RESULT = pd.DataFrame(TOTAL_RE_RESULT)
+
+writer = pd.ExcelWriter(r'C:/Users/dell/Desktop/test/1900225/RESULT_RESTORE.xls')
+TUMOR_RE_RESULT.to_excel(writer, sheet_name='TUMOR_RE_RESULT')
+STROMA_RE_RESULT.to_excel(writer, sheet_name='STROMA_RE_RESULT')
+TOTAL_RE_RESULT.to_excel(writer, sheet_name='TOTAL_RE_RESULT')
+writer.save()
+writer.close()
