@@ -1,0 +1,148 @@
+#####导入回归分析需要的程序包
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from statsmodels.formula.api import ols
+####导入数据
+DATA = pd.read_csv('C:/Users/dell/Desktop/TEST_OLS.csv')       #####‘输入文件路径‘
+DATA.head()
+
+####定义变量标签类型
+DATA['group1'] = DATA['group1'].astype('category')
+DATA['group2'] = DATA['group2'].astype('category')
+
+#######绘制散点图，查看变量相关性
+plt.scatter(DATA['Ki67'], DATA['PFS'], c='blue', alpha=0.75)    ####前面为x变量，后面为y变量
+plt.xlabel('Ki67')   ##x标签
+plt.ylabel('PFS')            ##y标签
+plt.show()
+
+
+
+########################################################建立一元回归模型#################################################
+
+
+
+###方法一：直接建模
+formula = 'PFS~Ki67'      ###定义模型
+DATA_model1 = ols(formula, data=DATA).fit()   ####ols方法进行模型估计
+DATA_model1.summary2()        ####查看模型结果
+
+###方法二：调用类
+import statsmodels.api as sm
+from statsmodels.stats.outliers_influence import summary_table
+from statsmodels.api import OLS
+x = DATA['Ki67']   ####输入自变量
+x = sm.add_constant(x) ###表明构建的模型中包含截距项
+y = DATA['PFS']     ####输入因变量
+DATA_model2 = sm.OLS(y, x).fit()
+DATA_model2.summary2()
+
+#####检验是否被正确线性建模
+sm.stats.diagnostic.linear_rainbow(DATA_model2)   ###输出结果为F统计量及其P值
+
+####检验残差项是否符合正态分布
+
+sm.qqplot(DATA_model2.resid, fit=True, line='45')    ###残差qq图
+plt.show()
+
+sm.ProbPlot(DATA_model2.resid, fit=True).ppplot(line='45')   ###残差pp图
+sm.ProbPlot(DATA_model2.resid, fit=True).qqplot(line='45')   ###残差qq图
+plt.show()
+
+fig = plt.gcf()
+#fig.set_size_inches(5, 2)
+####绘制自变量与残差的散点图
+plt.subplot(121)
+plt.plot(DATA['Ki67'], DATA_model2.resid, 'o')
+plt.xlabel('Ki67')
+plt.ylabel('residual')
+####绘制因变量与残差的散点图
+plt.subplot(122)
+plt.plot(DATA_model2.fittedvalues, DATA_model2.resid, 'o')
+plt.xlabel('predicted_value')
+plt.ylabel('residual')
+plt.show()
+
+####回归诊断图形
+fig = plt.figure(figsize=(12, 8))
+from statsmodels.graphics.regressionplots import plot_regress_exog
+plot_regress_exog(DATA_model2, 1, fig=fig)   ###第二个参数指模型中的第几个自变量
+plt.show()
+
+####模型预测
+from statsmodels.graphics.regressionplots import plot_fit
+plot_fit(DATA_model2, 1)
+plt.show()
+
+from statsmodels.sandbox.regression.predstd import wls_prediction_std
+prstd, interval_l, interval_u = wls_prediction_std(DATA_model2, alpha=0.05)
+fig = plt.subplots(figsize=(7, 4))
+plt.plot(DATA['Ki67'], DATA['PFS'], 'o', label="data")        ###自变量和因变量的散点图
+plt.plot(DATA['Ki67'], DATA_model2.fittedvalues, 'r--', label="OLS")     #####拟合的回归直线
+plt.plot(DATA['Ki67'], interval_u, 'r--')       #####上区间
+plt.plot(DATA['Ki67'], interval_l, 'r--')       #####下区间
+plt.legend(loc='best')
+plt.show()
+
+
+
+#####################################################建立多元回归模型####################################################
+formula = 'PFS~Ki67+FoxP3'
+mul_model1 = ols(formula, data=DATA).fit()
+mul_model1.summary2()
+
+formula = 'PFS~Ki67-FoxP3'         ####对于未通过t检验的自变量，予以去除
+mul_model2 = ols(formula, data=DATA).fit()
+mul_model2.summary2()
+
+#####含有定性变量的线性回归
+
+formula = 'PFS~Ki67-FoxP3+C(group1)+C(group2)'
+mul_model3 = ols(formula, data=DATA).fit()
+mul_model3.summary2()
+
+######非线性回归
+
+#####可线性化的非线性分析
+formula = 'PFS~Ki67+np.square(Ki67)'
+eb_model = ols(formula, data=DATA).fit()
+eb_model.summary2()
+plot_fit(eb_model, 2)
+plt.show()
+
+#######非线性模型（模型中至少有一个参数不是线性的）
+from scipy.optimize import curve_fit
+
+
+
+#######多项式回归
+DATA_est = np.polyfit(DATA['Ki67'], DATA['PFS'], 2)      ###三个参数分别为自变量，因变量，阶数
+DATA_est
+DATA_poly = np.poly1d(DATA_est)
+DATA_poly
+
+
+#####分位数回归
+from statsmodels.formula.api import quantreg
+
+formula = 'PFS~Ki67+C(group1)'
+DATA_qt = quantreg(formula, data=DATA)
+DATA_qtmodel1 = DATA_qt.fit(q=0.1)
+DATA_qtmodel1.summary()
+
+import warnings
+warnings.filterwarnings('ignore')
+quantiles = np.arange(0.05, 1, 0.05)
+def fit_model(v, q):
+    res = DATA_qt.fit(q=q)
+    return [q, res.params['Intercept'], res.params[v]] + res.conf_int(alpha=0.05).ix[v].tolist()
+names = locals()
+for i in ['Intercept','Ki67']:
+    names['params_%s' % i] = [fit_model(i, x) for x in quantiles]
+    names['params_%s' % i] = pd.DataFrame(names['params_%s' % i], columns=['quantile', 'Intercept', 'Beta', 'Beta_L', 'Beta_U'])
+
+params_Intercept.head()
+
+
