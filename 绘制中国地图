@@ -1,0 +1,13 @@
+import matplotlib.pyplot as plt
+from mpl_toolkits.basemap import Basemap
+
+plt.figure(figsize=(16, 8))     ###定义图的大小
+m = Basemap(llcrnrlon=77, llcrnrlat=14, urcrnrlon=140, urcrnrlat=51, projection='lcc', lat_1=33, lat_2=45, lon_0=100)      ###创建地图
+m.drawcoastlines()     ####画海岸线
+
+plt.show()         ####显示地图
+
+m.drawcounties(linewidth=1.5)
+
+m.readshapefile('C:/Users/dell/Downloads/gadm36_CHN_shp/gadm36_CHN_1', 'states', drawbounds=True)   ###添加省份shp文件
+
